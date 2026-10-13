@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#111318">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Stundenplan</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📅</text></svg>">
+<style>
+  :root {
+    --bg: #111318; --surface: #1a1d24; --line: #2a2e38; --text: #e8eaf0; --muted: #8a90a0;
+    --now: #ff3b30; --accent: #4f8cff;
+    --hour: 72px; --start: 8; --end: 20;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f6f8; --surface: #fff; --line: #e1e4ea; --text: #15171c; --muted: #6b7280; }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: calc(76px + var(--safe-b)); }
+
+  header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    padding: calc(env(safe-area-inset-top, 0px) + 12px) 16px 10px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; }
+  header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; min-height: 1.35em; }
+  header .sub b { color: var(--now); font-weight: 600; }
+
+  .timeline { position: relative; margin: 8px 12px 0 0;
+    height: calc((var(--end) - var(--start)) * var(--hour)); touch-action: pan-y; }
+  .hour { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+  .hour span { position: absolute; left: 8px; top: -9px; width: 40px; font-size: 12px; color: var(--muted);
+    background: var(--bg); padding-right: 4px; font-variant-numeric: tabular-nums; }
+  .events { position: absolute; left: 54px; right: 0; top: 0; bottom: 0; }
+
+  .ev { position: absolute; border-radius: 10px; padding: 6px 9px; overflow: hidden;
+    background: var(--c); color: #111; border: 1px solid rgba(0,0,0,.12);
+    box-shadow: 0 1px 2px rgba(0,0,0,.15); cursor: pointer; transition: opacity .2s; }
+  .ev.past { opacity: .45; }
+  .ev .t { font-size: 11.5px; font-weight: 600; opacity: .75; font-variant-numeric: tabular-nums; }
+  .ev .n { font-weight: 700; font-size: 14px; line-height: 1.2; }
+  .ev .k { font-size: 11px; font-weight: 700; opacity: .7; text-transform: uppercase; letter-spacing: .03em; }
+  .ev .rooms { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .room { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600;
+    padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,.65); color: #102a5c;
+    text-decoration: none; white-space: nowrap; }
+  .room::before { content: "📍"; font-size: 10px; }
+  .ev .note { font-size: 11px; margin-top: 3px; opacity: .8; }
+
+  .now { position: absolute; left: 48px; right: -12px; height: 0; border-top: 2px solid var(--now); z-index: 10;
+    pointer-events: none; }
+  .now::before { content: ""; position: absolute; left: -5px; top: -6px; width: 10px; height: 10px;
+    border-radius: 50%; background: var(--now); }
+  .now span { position: absolute; left: -48px; top: -9px; font-size: 11px; font-weight: 700; color: #fff;
+    background: var(--now); padding: 1px 4px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+
+  .empty { text-align: center; color: var(--muted); padding: 64px 24px; font-size: 16px; }
+  .empty div { font-size: 48px; margin-bottom: 8px; }
+
+  nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; gap: 4px;
+    padding: 8px 10px calc(8px + var(--safe-b)); background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-top: 1px solid var(--line); }
+  nav button { flex: 1; border: 0; background: transparent; color: var(--muted); font: inherit;
+    padding: 6px 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 1px; }
+  nav button .d { font-size: 15px; font-weight: 700; }
+  nav button .dt { font-size: 11px; font-variant-numeric: tabular-nums; }
+  nav button.today .d { color: var(--now); }
+  nav button.active { background: var(--accent); color: #fff; }
+  nav button.active .d { color: #fff; }
+
+  dialog { border: 0; border-radius: 18px 18px 0 0; padding: 20px 20px calc(24px + var(--safe-b));
+    width: 100%; max-width: 560px; margin: auto auto 0; background: var(--surface); color: var(--text); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  dialog h2 { margin: 6px 0 4px; font-size: 20px; }
+  dialog .bar { width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: -8px auto 12px; }
+  dialog .meta { color: var(--muted); margin-bottom: 12px; }
+  dialog ul { list-style: none; padding: 0; margin: 0 0 12px; }
+  dialog li { padding: 10px 0; border-top: 1px solid var(--line); }
+  dialog li a { color: var(--accent); font-weight: 600; text-decoration: none; }
+  dialog .chip { display: inline-block; width: 12px; height: 12px; border-radius: 4px; background: var(--c);
+    margin-right: 6px; vertical-align: -1px; }
+  dialog .close { width: 100%; padding: 12px; border: 0; border-radius: 12px; background: var(--line);
+    color: var(--text); font: inherit; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Heute</h1>
+  <div class="sub" id="sub"></div>
+</header>
+
+<main id="main"></main>
+
+<nav id="nav"></nav>
+
+<dialog id="dlg"></dialog>
+
+<script>
+const NAV = id => `https://nav.tum.de/room/${id}`;
+// Raumzuordnung: Bezeichnung im Plan -> NavigaTUM-ID
+const R = {
+  "BC2 0.01.17": "8102.EG.117",
+  "BC2 0.01.16": "8102.EG.116",
+  "BC2 3.1.08":  "8102.03.108",
+  "BC2 3.5.06":  "8102.03.506",
+  "8102.EG.104": "8102.EG.104",
+  "5416.01.003": "5416.01.003",
+  "LMU-HS":      "5123.EG.019",
+};
+const C = {
+  mat:  "#fff35c", math: "#c9d8a3", thermo: "#7ff5c6", fluid: "#ef6461",
+  ethics: "#9fd466", bio: "#a3cbd8", unc: "#cffcfc", woe: "#b9c9e3",
+};
+const room = (r, label) => ({ r, label });
+
+// Tage: 1=Mo ... 5=Fr. Zeiten "HH:MM". from/until optional (ISO-Datum, inkl.)
+const PLAN = {
+  1: [
+    { s:"08:15", e:"09:45", k:"V", n:"Materialwissenschaften I", c:C.mat,
+      who:"Dr. M. Hülsey (CH), Prof. Ch. Papadakis (PH)", rooms:[room("BC2 0.01.17","209 PL")] },
+    { s:"10:00", e:"10:45", k:"Ü", n:"Materialwissenschaften I", c:C.mat,
+      rooms:[room("BC2 3.1.08","Gruppe 1"), room("BC2 0.01.16","Gruppe 2")] },
+    { s:"11:00", e:"11:45", k:"Ü", n:"Materialwissenschaften I", c:C.mat,
+      rooms:[room("BC2 3.1.08","Gruppe 3"), room("BC2 0.01.16","Gruppe 4")] },
+    { s:"12:30", e:"14:00", k:"V + ZÜ", n:"Fluid Mechanics (MW + BGU)", c:C.fluid,
+      who:"Prof. Kaltenbach (Teil I MW); Prof. Khanwale (Teil II BGU)",
+      rooms:[room("BC2 0.01.17","Gruppe 1"), room("BC2 0.01.16","Gruppe 2")],
+      note:"Teil 1 bis 5.11.2026 · Gruppe 2 nur für Teil 2" },
+    { s:"14:30", e:"16:00", k:"Ü", n:"Mathematik III", c:C.math, rooms:[room("BC2 3.5.06","Gruppe 1")] },
+    { s:"16:15", e:"17:45", k:"Ü", n:"Mathematik III", c:C.math, rooms:[room("BC2 3.5.06","Gruppe 2")] },
+    { s:"18:00", e:"19:30", k:"Ringvorlesung", n:"World of Engineering (WoE)", c:C.woe,
+      rooms:[], note:"Ende ca. 19:30 · Termine auf der Website BSc ES" },
+  ],
+  2: [
+    { s:"08:15", e:"09:45", k:"V", n:"Mathematik III", c:C.math, who:"Prof. E. Ullmann",
+      rooms:[room("BC2 0.01.17","209 PL")] },
+    { s:"10:15", e:"11:30", k:"V", n:"Engineering Thermodynamics", c:C.thermo, who:"Dr. Camilo Silva",
+      rooms:[room("BC2 0.01.17","209 PL")], note:"Genaue Planung siehe Moodle" },
+    { s:"12:00", e:"13:30", k:"PSS", n:"Problem Solving Session Engineering Thermodynamics", c:C.thermo,
+      rooms:[room("BC2 0.01.17","200 PL")], note:"Genaue Planung siehe Moodle" },
+    { s:"13:45", e:"15:15", k:"Tutorium", n:"Fluid Mechanics (Teil I MW)", c:C.fluid,
+      rooms:[room("BC2 0.01.16","Gruppe 1")] },
+    { s:"13:45", e:"15:15", k:"Tutorium", n:"Fluid Mechanics (Teil II BGU)", c:C.fluid,
+      rooms:[room("BC2 0.01.16","Gruppe 1"), room("8102.EG.104","Gruppe 2")] },
+    { s:"15:30", e:"17:00", k:"Tutorium", n:"Fluid Mechanics (Teil I MW)", c:C.fluid,
+      rooms:[room("BC2 0.01.16","Gruppe 2")] },
+    { s:"15:30", e:"17:00", k:"Tutorium", n:"Fluid Mechanics (Teil II BGU)", c:C.fluid,
+      rooms:[room("BC2 0.01.16","Gruppe 3"), room("8102.EG.104","Gruppe 4")] },
+    { s:"17:15", e:"18:45", k:"Ü", n:"Mathematik III", c:C.math, rooms:[room("BC2 3.1.08","Gruppe 3")] },
+  ],
+  3: [
+    { s:"08:15", e:"09:45", k:"V", n:"Materialwissenschaften I", c:C.mat,
+      who:"Dr. M. Hülsey (CH), Prof. Ch. Papadakis (PH)", rooms:[room("BC2 0.01.17","209 PL")] },
+    { s:"10:00", e:"10:45", k:"Z-Ü", n:"Engineering Thermodynamics", c:C.thermo,
+      rooms:[room("BC2 0.01.17","209 PL")], note:"Genaue Planung siehe Moodle" },
+    { s:"11:00", e:"12:00", k:"V", n:"Engineering Thermodynamics", c:C.thermo,
+      rooms:[room("BC2 0.01.17","209 PL")], note:"Genaue Planung siehe Moodle" },
+    { s:"15:00", e:"17:30", k:"V", n:"Modeling of Uncertainty and Data in Engineering Sciences", c:C.unc,
+      who:"Prof. F.-S. Koutsourelakis", rooms:[room("LMU-HS","LMU-Hörsaal")],
+      note:"90 Min + 45 Min + 15 Min Pause" },
+  ],
+  4: [
+    { s:"08:30", e:"10:00", k:"V", n:"Engineering Ethics", c:C.ethics, who:"Prof. J. Betz",
+      rooms:[room("BC2 0.01.17","209 PL")] },
+    { s:"10:15", e:"11:15", k:"V + ZÜ", n:"Fluid Mechanics (MW + BGU)", c:C.fluid,
+      rooms:[room("BC2 0.01.17","209 PL")], note:"Teil 1 bis 5.11.2026", until:"2026-11-05" },
+    { s:"11:30", e:"13:00", k:"V + ZÜ", n:"Fluid Mechanics (MW + BGU)", c:C.fluid,
+      who:"Prof. Kaltenbach (Teil I MW); Prof. Khanwale (Teil II BGU)",
+      rooms:[room("BC2 0.01.17","209 PL")], until:"2026-11-08" },
+    { s:"11:30", e:"13:30", k:"V + ZÜ", n:"Fluid Mechanics (MW + BGU)", c:C.fluid,
+      who:"Prof. Khanwale (Teil II BGU)", rooms:[room("BC2 0.01.17","209 PL")],
+      note:"Teil 2 ab 9.11.2026 bis 13:30 Uhr", from:"2026-11-09" },
+    { s:"14:00", e:"15:30", k:"V + E hybrid", n:"Biotechnologie für Ingenieure", c:C.bio,
+      who:"Prof. S. Berensmeier", rooms:[room("5416.01.003","Interims II HS 2")],
+      note:"parallel zu Einführung in die Bioprozesstechnik" },
+    { s:"16:00", e:"17:30", k:"Ü", n:"Mathematik III", c:C.math, rooms:[room("BC2 3.5.06","Gruppe 4")] },
+  ],
+  5: [],
+};
+
+const DAYS = ["So","Mo","Di","Mi","Do","Fr","Sa"];
+const DAYS_LONG = ["Sonntag","Montag","Dienstag","Mittwoch","Donnerstag","Freitag","Samstag"];
+const START = 8, END = 20;
+const $ = s => document.querySelector(s);
+const mins = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const fmtDate = d => d.toLocaleDateString("de-DE", { day:"numeric", month:"numeric" });
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// Woche, die angezeigt wird: am Wochenende die kommende
+function weekDates(now) {
+  const d = new Date(now); d.setHours(0,0,0,0);
+  const wd = d.getDay();
+  const monday = new Date(d);
+  monday.setDate(d.getDate() - ((wd + 6) % 7) + (wd === 0 || wd === 6 ? 7 : 0));
+  return [1,2,3,4,5].map(i => { const x = new Date(monday); x.setDate(monday.getDate() + i - 1); return x; });
+}
+
+function eventsFor(date) {
+  const day = date.getDay(), key = iso(date);
+  return (PLAN[day] || []).filter(e => (!e.from || key >= e.from) && (!e.until || key <= e.until));
+}
+
+// Überlappende Termine nebeneinander anordnen
+function layout(evs) {
+  const items = evs.map(e => ({ e, s: mins(e.s), en: mins(e.e) })).sort((a,b) => a.s - b.s || b.en - a.en);
+  let cluster = [], clusterEnd = -1;
+  const flush = () => {
+    const cols = [];
+    for (const it of cluster) {
+      let c = cols.findIndex(end => end <= it.s);
+      if (c < 0) { c = cols.length; cols.push(0); }
+      cols[c] = it.en; it.col = c;
+    }
+    cluster.forEach(it => it.ncol = cols.length);
+    cluster = [];
+  };
+  for (const it of items) {
+    if (it.s >= clusterEnd && cluster.length) flush();
+    cluster.push(it); clusterEnd = Math.max(clusterEnd, it.en);
+  }
+  if (cluster.length) flush();
+  return items;
+}
+
+let selected = 0, dates = [];
+
+function render(scrollToNow) {
+  const now = new Date();
+  dates = weekDates(now);
+  const date = dates[selected];
+  const isToday = iso(date) === iso(now);
+  const nowMin = now.getHours()*60 + now.getMinutes();
+
+  $("#title").textContent = isToday ? `Heute · ${DAYS_LONG[date.getDay()]}` : DAYS_LONG[date.getDay()];
+  document.title = `${DAYS_LONG[date.getDay()]} · Stundenplan`;
+
+  const evs = eventsFor(date);
+  const items = layout(evs);
+
+  // Untertitel: was läuft / kommt als nächstes
+  let sub = date.toLocaleDateString("de-DE", { weekday:"long", day:"numeric", month:"long" });
+  if (isToday) {
+    const cur = items.filter(i => i.s <= nowMin && nowMin < i.en);
+    const next = items.find(i => i.s > nowMin);
+    if (cur.length) sub = `<b>Jetzt:</b> ${esc(cur[0].e.n)} · noch ${cur[0].en - nowMin} Min`;
+    else if (next) sub = `<b>Als Nächstes:</b> ${esc(next.e.n)} in ${fmtDur(next.s - nowMin)}`;
+    else if (items.length) sub = "Für heute geschafft 🎉";
+  }
+  $("#sub").innerHTML = sub;
+
+  const main = $("#main");
+  if (!evs.length) {
+    main.innerHTML = `<div class="empty"><div>🌴</div>Keine Veranstaltungen am ${DAYS_LONG[date.getDay()]}.</div>`;
+  } else {
+    let html = `<div class="timeline">`;
+    for (let h = START; h <= END; h++)
+      html += `<div class="hour" style="top:calc(${h-START} * var(--hour))"><span>${String(h).padStart(2,"0")}:00</span></div>`;
+    html += `<div class="events">`;
+    items.forEach((it, idx) => {
+      const e = it.e, w = 100 / it.ncol;
+      const past = isToday && it.en <= nowMin;
+      html += `<div class="ev${past ? " past" : ""}" data-i="${idx}" style="--c:${e.c};
+        top:calc(${(it.s - START*60)/60} * var(--hour) + 1px); height:calc(${(it.en - it.s)/60} * var(--hour) - 3px);
+        left:calc(${it.col * w}% + ${it.col ? 3 : 0}px); width:calc(${w}% - ${it.col ? 3 : 0}px)">
+        <div class="t">${e.s}–${e.e} · <span class="k">${esc(e.k)}</span></div>
+        <div class="n">${esc(e.n)}</div>
+        <div class="rooms">${e.rooms.map(r =>
+          `<a class="room" href="${NAV(R[r.r])}" target="_blank" rel="noopener">${esc(r.r.replace("BC2 ",""))}${it.ncol > 1 ? "" : ` · ${esc(r.label)}`}</a>`).join("")}</div>
+        ${e.note && it.ncol === 1 ? `<div class="note">${esc(e.note)}</div>` : ""}
+      </div>`;
+    });
+    html += `</div>`;
+    if (isToday && nowMin >= START*60 && nowMin <= END*60) {
+      const t = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+      html += `<div class="now" id="now" style="top:calc(${(nowMin - START*60)/60} * var(--hour))"><span>${t}</span></div>`;
+    }
+    html += `</div>`;
+    main.innerHTML = html;
+    main.querySelectorAll(".ev").forEach(el => el.addEventListener("click", ev => {
+      if (ev.target.closest("a")) return;
+      openDetails(items[+el.dataset.i].e);
+    }));
+  }
+
+  // Navigation
+  $("#nav").innerHTML = dates.map((d, i) =>
+    `<button class="${i === selected ? "active" : ""} ${iso(d) === iso(now) ? "today" : ""}" data-i="${i}">
+      <span class="d">${DAYS[d.getDay()]}</span><span class="dt">${fmtDate(d)}</span></button>`).join("");
+
+  if (scrollToNow) {
+    const target = $("#now") || (evs.length && main.querySelector(".ev"));
+    if (target) {
+      const y = target.getBoundingClientRect().top + scrollY - innerHeight / 3;
+      scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+    } else scrollTo({ top: 0 });
+  }
+}
+
+function fmtDur(m) { return m < 60 ? `${m} Min` : `${Math.floor(m/60)} h ${m%60 ? (m%60) + " Min" : ""}`.trim(); }
+
+function openDetails(e) {
+  const dlg = $("#dlg");
+  dlg.innerHTML = `<div class="bar"></div>
+    <div><span class="chip" style="--c:${e.c}"></span><span class="k">${esc(e.k)}</span></div>
+    <h2>${esc(e.n)}</h2>
+    <div class="meta">${e.s}–${e.e} Uhr${e.who ? `<br>${esc(e.who)}` : ""}${e.note ? `<br>${esc(e.note)}` : ""}</div>
+    <ul>${e.rooms.map(r => `<li>${esc(r.label)}: <a href="${NAV(R[r.r])}" target="_blank" rel="noopener">📍 ${esc(r.r)} → NavigaTUM</a></li>`).join("")}</ul>
+    <button class="close">Schließen</button>`;
+  dlg.querySelector(".close").onclick = () => dlg.close();
+  dlg.onclick = ev => { if (ev.target === dlg) dlg.close(); };
+  dlg.showModal();
+}
+
+function selectDay(i, scroll = true) {
+  selected = Math.max(0, Math.min(4, i));
+  render(scroll);
+}
+
+$("#nav").addEventListener("click", ev => {
+  const b = ev.target.closest("button"); if (b) selectDay(+b.dataset.i);
+});
+
+// Wischen zwischen Tagen
+let tx = null, ty = null;
+addEventListener("touchstart", e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, { passive: true });
+addEventListener("touchend", e => {
+  if (tx === null || $("#dlg").open) return;
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) selectDay(selected + (dx < 0 ? 1 : -1));
+  tx = ty = null;
+}, { passive: true });
+
+// Start: heute (Wochenende/Freitag ohne Termine -> trotzdem Tag anzeigen; Sa/So -> Montag)
+(function init() {
+  const wd = new Date().getDay();
+  selected = wd >= 1 && wd <= 5 ? wd - 1 : 0;
+  render(true);
+  setInterval(() => render(false), 30 * 1000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(false); });
+})();
+</script>
+</body>
+</html>
