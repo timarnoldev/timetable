@@ -50,6 +50,11 @@
     text-decoration: none; white-space: nowrap; }
   .room::before { content: "📍"; font-size: 10px; }
   .ev .note { font-size: 11px; margin-top: 3px; opacity: .8; }
+  .ev.narrow { padding: 5px 7px; }
+  .ev.narrow .t { font-size: 10.5px; }
+  .ev.narrow .n { font-size: 12.5px; }
+  .ev.narrow .rooms { gap: 3px; margin-top: 3px; }
+  .ev.narrow .room { font-size: 11px; padding: 1px 6px; }
 
   .now { position: absolute; left: 48px; right: -12px; height: 0; border-top: 2px solid var(--now); z-index: 10;
     pointer-events: none; }
@@ -264,13 +269,15 @@ function render(scrollToNow) {
     items.forEach((it, idx) => {
       const e = it.e, w = 100 / it.ncol;
       const past = isToday && it.en <= nowMin;
-      html += `<div class="ev${past ? " past" : ""}" data-i="${idx}" style="--c:${e.c};
+      html += `<div class="ev${past ? " past" : ""}${it.ncol > 1 ? " narrow" : ""}" data-i="${idx}" style="--c:${e.c};
         top:calc(${(it.s - START*60)/60} * var(--hour) + 1px); height:calc(${(it.en - it.s)/60} * var(--hour) - 3px);
         left:calc(${it.col * w}% + ${it.col ? 3 : 0}px); width:calc(${w}% - ${it.col ? 3 : 0}px)">
-        <div class="t">${e.s}–${e.e} · <span class="k">${esc(e.k)}</span></div>
+        <div class="t">${e.s}–${e.e}${it.ncol > 1 ? "" : ` · <span class="k">${esc(e.k)}</span>`}</div>
         <div class="n">${esc(e.n)}</div>
         <div class="rooms">${e.rooms.map(r =>
-          `<a class="room" href="${NAV(R[r.r])}" target="_blank" rel="noopener">${esc(r.r.replace("BC2 ",""))}${it.ncol > 1 ? "" : ` · ${esc(r.label)}`}</a>`).join("")}</div>
+          `<a class="room" href="${NAV(R[r.r])}" target="_blank" rel="noopener">${it.ncol > 1
+            ? `${esc(r.label.replace("Gruppe ","G"))} · ${esc(r.r.replace("BC2 ","").replace("8102.",""))}`
+            : `${esc(r.r.replace("BC2 ",""))} · ${esc(r.label)}`}</a>`).join("")}</div>
         ${e.note && it.ncol === 1 ? `<div class="note">${esc(e.note)}</div>` : ""}
       </div>`;
     });
